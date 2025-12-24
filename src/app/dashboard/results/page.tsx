@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { TestResult, TEST_TYPE_NAMES } from '@/types'
-import { ChevronDown, Play, Eye } from 'lucide-react'
+import { ChevronDown, Play, Eye, X } from 'lucide-react'
 import { format } from 'date-fns'
 
 export default function ResultsPage() {
@@ -22,6 +22,11 @@ export default function ResultsPage() {
   // 分頁
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+  
+  // 彈窗狀態
+  const [selectedResult, setSelectedResult] = useState<TestResult | null>(null)
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showVideoModal, setShowVideoModal] = useState(false)
 
   const supabase = createClient()
 
@@ -75,6 +80,16 @@ export default function ResultsPage() {
   const handleClear = () => {
     setFilters({ testType: '', dateFrom: '', dateTo: '', keyword: '' })
     setPage(1)
+  }
+  
+  const handleViewDetail = (result: TestResult) => {
+    setSelectedResult(result)
+    setShowDetailModal(true)
+  }
+  
+  const handlePlayVideo = (result: TestResult) => {
+    setSelectedResult(result)
+    setShowVideoModal(true)
   }
 
   const totalPages = Math.ceil(total / pageSize)
@@ -225,6 +240,7 @@ export default function ResultsPage() {
                     <td className="table-cell">
                       <div className="flex gap-2">
                         <button 
+                          onClick={() => handleViewDetail(result)}
                           className="p-1 hover:bg-gray-100 rounded"
                           title="查看詳情"
                         >
@@ -232,6 +248,7 @@ export default function ResultsPage() {
                         </button>
                         {result.hls_stream_name && (
                           <button 
+                            onClick={() => handlePlayVideo(result)}
                             className="p-1 hover:bg-gray-100 rounded"
                             title="播放錄影"
                           >
@@ -271,6 +288,191 @@ export default function ResultsPage() {
             </div>
           </div>
         )}
+      </div>
+      
+      {/* 詳情彈窗 */}
+      {showDetailModal && selectedResult && (
+        <DetailModal 
+          result={selectedResult} 
+          onClose={() => setShowDetailModal(false)} 
+        />
+      )}
+      
+      {/* 影片播放彈窗 */}
+      {showVideoModal && selectedResult && (
+        <VideoModal 
+          result={selectedResult} 
+          onClose={() => setShowVideoModal(false)} 
+        />
+      )}
+    </div>
+  )
+}
+
+// 詳情彈窗組件
+function DetailModal({ result, onClose }: { result: TestResult; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+        {/* 標題 */}
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="text-lg font-semibold">測試結果詳情</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+            <X size={20} />
+          </button>
+        </div>
+        
+        {/* 內容 */}
+        <div className="p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm text-gray-500">受測者</div>
+              <div className="font-medium">{result.subject?.name || '-'}</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-500">測試類型</div>
+              <div className="font-medium">
+                {TEST_TYPE_NAMES[result.test_type as keyof typeof TEST_TYPE_NAMES] || result.test_type}
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-orange-50 p-4 rounded-lg text-center">
+            <div className="text-sm text-orange-600 mb-1">測試結果</div>
+            <div className="text-3xl font-bold text-orange-600">
+              {result.result_value} <span className="text-lg">{result.result_unit}</span>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm text-gray-500">測試時間</div>
+              <div>{format(new Date(result.tested_at), 'yyyy/MM/dd HH:mm:ss')}</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-500">設備 ID</div>
+              <div>{result.device_id || '-'}</div>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm text-gray-500">同步時間</div>
+              <div>{result.synced_at ? format(new Date(result.synced_at), 'yyyy/MM/dd HH:mm:ss') : '-'}</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-500">HLS 串流名稱</div>
+              <div className="truncate text-sm">{result.hls_stream_name || '-'}</div>
+            </div>
+          </div>
+          
+          {result.hls_start_time && result.hls_end_time && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-sm text-gray-500">錄影開始</div>
+                <div className="text-sm">{format(new Date(result.hls_start_time), 'HH:mm:ss')}</div>
+              </div>
+              <div>
+                <div className="text-sm text-gray-500">錄影結束</div>
+                <div className="text-sm">{format(new Date(result.hls_end_time), 'HH:mm:ss')}</div>
+              </div>
+            </div>
+          )}
+          
+          <div>
+            <div className="text-sm text-gray-500 mb-1">ULID</div>
+            <div className="text-xs text-gray-400 font-mono break-all">{result.ulid}</div>
+          </div>
+        </div>
+        
+        {/* 底部按鈕 */}
+        <div className="p-4 border-t flex justify-end">
+          <button onClick={onClose} className="btn-secondary">
+            關閉
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// 影片播放彈窗組件
+function VideoModal({ result, onClose }: { result: TestResult; onClose: () => void }) {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [hlsUrl, setHlsUrl] = useState<string | null>(null)
+  
+  useEffect(() => {
+    // TODO: 這裡需要呼叫 AWS KVS API 取得 HLS URL
+    // 目前先顯示提示訊息
+    setLoading(false)
+    setError('HLS 影片播放功能需要配置 AWS KVS')
+  }, [result.hls_stream_name])
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl mx-4">
+        {/* 標題 */}
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="text-lg font-semibold">
+            錄影回放 - {TEST_TYPE_NAMES[result.test_type as keyof typeof TEST_TYPE_NAMES] || result.test_type}
+          </h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+            <X size={20} />
+          </button>
+        </div>
+        
+        {/* 影片區域 */}
+        <div className="p-4">
+          <div className="bg-gray-900 rounded-lg aspect-video flex items-center justify-center">
+            {loading ? (
+              <div className="text-white">載入中...</div>
+            ) : error ? (
+              <div className="text-center text-white p-4">
+                <div className="mb-2">{error}</div>
+                <div className="text-sm text-gray-400">
+                  串流名稱: {result.hls_stream_name}
+                </div>
+              </div>
+            ) : hlsUrl ? (
+              <video 
+                controls 
+                autoPlay 
+                className="w-full h-full rounded-lg"
+                src={hlsUrl}
+              >
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              <div className="text-gray-400">無法載入影片</div>
+            )}
+          </div>
+          
+          {/* 影片資訊 */}
+          <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <div className="text-gray-500">受測者</div>
+              <div className="font-medium">{result.subject?.name || '-'}</div>
+            </div>
+            <div>
+              <div className="text-gray-500">測試時間</div>
+              <div>{format(new Date(result.tested_at), 'yyyy/MM/dd HH:mm')}</div>
+            </div>
+            <div>
+              <div className="text-gray-500">測試結果</div>
+              <div className="font-medium text-orange-600">
+                {result.result_value} {result.result_unit}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* 底部按鈕 */}
+        <div className="p-4 border-t flex justify-end">
+          <button onClick={onClose} className="btn-secondary">
+            關閉
+          </button>
+        </div>
       </div>
     </div>
   )
