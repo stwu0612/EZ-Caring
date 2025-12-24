@@ -6,7 +6,7 @@ const REGION = process.env.AWS_REGION || 'ap-northeast-1'
 
 export async function POST(request: NextRequest) {
   try {
-    const { streamName, startTime, endTime } = await request.json()
+    const { streamName, startTime, endTime, testedAt } = await request.json()
 
     if (!streamName) {
       return NextResponse.json(
@@ -56,27 +56,55 @@ export async function POST(request: NextRequest) {
       endpoint: dataEndpoint,
     })
 
-    // 設定時間範圍（如果有提供）
-    const hlsParams: any = {
+    // 計算時間範圍
+    let hlsStartTime: Date
+    let hlsEndTime: Date
+
+    if (startTime && endTime) {
+      // 有明確的開始和結束時間
+      hlsStartTime = new Date(startTime)
+      hlsEndTime = new Date(endTime)
+    } else if (testedAt) {
+      // 根據測試時間估算（測試前 1 分鐘到測試後 5 分鐘）
+      const testTime = new Date(testedAt)
+      hlsStartTime = new Date(testTime.getTime() - 60 * 1000) // 1 分鐘前
+      hlsEndTime = new Date(testTime.getTime() + 5 * 60 * 1000) // 5 分鐘後
+    } else {
+      // 從串流名稱中提取時間戳（exam-1766572119961 格式）
+      const match = streamName.match(/exam-(\d+)/)
+      if (match) {
+        const timestamp = parseInt(match[1])
+        hlsStartTime = new Date(timestamp - 60 * 1000) // 1 分鐘前
+        hlsEndTime = new Date(timestamp + 5 * 60 * 1000) // 5 分鐘後
+      } else {
+        // 最後手段：使用最近 10 分鐘
+        hlsEndTime = new Date()
+        hlsStartTime = new Date(hlsEndTime.getTime() - 10 * 60 * 1000)
+      }
+    }
+
+    const hlsParams = {
       StreamName: streamName,
-      PlaybackMode: 'ON_DEMAND',
+      PlaybackMode: 'ON_DEMAND' as const,
       HLSFragmentSelector: {
-        FragmentSelectorType: 'PRODUCER_TIMESTAMP',
+        FragmentSelectorType: 'PRODUCER_TIMESTAMP' as const,
+        TimestampRange: {
+          StartTimestamp: hlsStartTime,
+          EndTimestamp: hlsEndTime,
+        },
       },
-      ContainerFormat: 'FRAGMENTED_MP4',
-      DiscontinuityMode: 'ALWAYS',
-      DisplayFragmentTimestamp: 'ALWAYS',
+      ContainerFormat: 'FRAGMENTED_MP4' as const,
+      DiscontinuityMode: 'ALWAYS' as const,
+      DisplayFragmentTimestamp: 'ALWAYS' as const,
       MaxMediaPlaylistFragmentResults: 5000,
       Expires: 3600, // 1 小時有效
     }
 
-    // 如果有指定時間範圍
-    if (startTime && endTime) {
-      hlsParams.HLSFragmentSelector.TimestampRange = {
-        StartTimestamp: new Date(startTime),
-        EndTimestamp: new Date(endTime),
-      }
-    }
+    console.log('HLS Params:', {
+      streamName,
+      startTime: hlsStartTime.toISOString(),
+      endTime: hlsEndTime.toISOString(),
+    })
 
     const getHLSCommand = new GetHLSStreamingSessionURLCommand(hlsParams)
     const hlsResponse = await archivedMediaClient.send(getHLSCommand)

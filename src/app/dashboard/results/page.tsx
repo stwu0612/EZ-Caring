@@ -417,6 +417,7 @@ function VideoModal({ result, onClose }: { result: TestResult; onClose: () => vo
             streamName: result.hls_stream_name,
             startTime: result.hls_start_time,
             endTime: result.hls_end_time,
+            testedAt: result.tested_at,
           }),
         })
         
