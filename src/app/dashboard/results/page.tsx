@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { TestResult, TEST_TYPE_NAMES } from '@/types'
-import { ChevronDown, Play, Eye, X } from 'lucide-react'
+import { ChevronDown, Play, Eye, X, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
+import Hls from 'hls.js'
 
 export default function ResultsPage() {
   const [results, setResults] = useState<TestResult[]>([])
@@ -398,16 +399,95 @@ function DetailModal({ result, onClose }: { result: TestResult; onClose: () => v
 
 // 影片播放彈窗組件
 function VideoModal({ result, onClose }: { result: TestResult; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const hlsRef = useRef<Hls | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [hlsUrl, setHlsUrl] = useState<string | null>(null)
   
   useEffect(() => {
-    // TODO: 這裡需要呼叫 AWS KVS API 取得 HLS URL
-    // 目前先顯示提示訊息
-    setLoading(false)
-    setError('HLS 影片播放功能需要配置 AWS KVS')
-  }, [result.hls_stream_name])
+    const fetchHlsUrl = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        
+        const response = await fetch('/api/kvs/hls', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            streamName: result.hls_stream_name,
+            startTime: result.hls_start_time,
+            endTime: result.hls_end_time,
+          }),
+        })
+        
+        const data = await response.json()
+        
+        if (!data.success) {
+          setError(data.error || '無法取得影片')
+          setLoading(false)
+          return
+        }
+        
+        const hlsUrl = data.hlsUrl
+        
+        // 使用 HLS.js 播放
+        if (videoRef.current) {
+          if (Hls.isSupported()) {
+            const hls = new Hls({
+              maxBufferLength: 30,
+              maxMaxBufferLength: 60,
+            })
+            hlsRef.current = hls
+            
+            hls.loadSource(hlsUrl)
+            hls.attachMedia(videoRef.current)
+            
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              setLoading(false)
+              videoRef.current?.play()
+            })
+            
+            hls.on(Hls.Events.ERROR, (event, data) => {
+              console.error('HLS Error:', data)
+              if (data.fatal) {
+                setError('影片載入失敗')
+                setLoading(false)
+              }
+            })
+          } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+            // Safari 原生支援 HLS
+            videoRef.current.src = hlsUrl
+            videoRef.current.addEventListener('loadedmetadata', () => {
+              setLoading(false)
+              videoRef.current?.play()
+            })
+          } else {
+            setError('瀏覽器不支援 HLS 播放')
+            setLoading(false)
+          }
+        }
+      } catch (err: any) {
+        console.error('Fetch HLS URL error:', err)
+        setError(err.message || '載入失敗')
+        setLoading(false)
+      }
+    }
+    
+    if (result.hls_stream_name) {
+      fetchHlsUrl()
+    } else {
+      setError('沒有錄影資料')
+      setLoading(false)
+    }
+    
+    // 清理
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy()
+        hlsRef.current = null
+      }
+    }
+  }, [result.hls_stream_name, result.hls_start_time, result.hls_end_time])
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -424,28 +504,33 @@ function VideoModal({ result, onClose }: { result: TestResult; onClose: () => vo
         
         {/* 影片區域 */}
         <div className="p-4">
-          <div className="bg-gray-900 rounded-lg aspect-video flex items-center justify-center">
-            {loading ? (
-              <div className="text-white">載入中...</div>
-            ) : error ? (
+          <div className="bg-gray-900 rounded-lg aspect-video flex items-center justify-center relative overflow-hidden">
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-10">
+                <div className="text-center text-white">
+                  <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+                  <div>載入中...</div>
+                </div>
+              </div>
+            )}
+            
+            {error && (
               <div className="text-center text-white p-4">
-                <div className="mb-2">{error}</div>
+                <div className="mb-2 text-red-400">{error}</div>
                 <div className="text-sm text-gray-400">
                   串流名稱: {result.hls_stream_name}
                 </div>
               </div>
-            ) : hlsUrl ? (
-              <video 
-                controls 
-                autoPlay 
-                className="w-full h-full rounded-lg"
-                src={hlsUrl}
-              >
-                Your browser does not support the video tag.
-              </video>
-            ) : (
-              <div className="text-gray-400">無法載入影片</div>
             )}
+            
+            <video 
+              ref={videoRef}
+              controls 
+              className="w-full h-full rounded-lg"
+              style={{ display: error ? 'none' : 'block' }}
+            >
+              Your browser does not support the video tag.
+            </video>
           </div>
           
           {/* 影片資訊 */}
