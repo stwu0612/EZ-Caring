@@ -405,6 +405,8 @@ function VideoModal({ result, onClose }: { result: TestResult; onClose: () => vo
   const [error, setError] = useState<string | null>(null)
   
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout
+    
     const fetchHlsUrl = async () => {
       try {
         setLoading(true)
@@ -430,6 +432,19 @@ function VideoModal({ result, onClose }: { result: TestResult; onClose: () => vo
         }
         
         const hlsUrl = data.hlsUrl
+        console.log('HLS URL:', hlsUrl)
+        console.log('Debug info:', data.debug)
+        
+        // 設定 15 秒超時
+        timeoutId = setTimeout(() => {
+          if (loading) {
+            setError('影片載入超時，請稍後再試')
+            setLoading(false)
+            if (hlsRef.current) {
+              hlsRef.current.destroy()
+            }
+          }
+        }, 15000)
         
         // 使用 HLS.js 播放
         if (videoRef.current) {
@@ -437,30 +452,56 @@ function VideoModal({ result, onClose }: { result: TestResult; onClose: () => vo
             const hls = new Hls({
               maxBufferLength: 30,
               maxMaxBufferLength: 60,
+              startLevel: -1,
+              debug: false,
             })
             hlsRef.current = hls
             
             hls.loadSource(hlsUrl)
             hls.attachMedia(videoRef.current)
             
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+              console.log('HLS Manifest parsed, levels:', data.levels.length)
+              clearTimeout(timeoutId)
               setLoading(false)
-              videoRef.current?.play()
+              videoRef.current?.play().catch(e => console.log('Autoplay blocked:', e))
             })
             
             hls.on(Hls.Events.ERROR, (event, data) => {
               console.error('HLS Error:', data)
               if (data.fatal) {
-                setError('影片載入失敗')
+                clearTimeout(timeoutId)
+                switch (data.type) {
+                  case Hls.ErrorTypes.NETWORK_ERROR:
+                    setError('網路錯誤，無法載入影片')
+                    break
+                  case Hls.ErrorTypes.MEDIA_ERROR:
+                    setError('媒體格式錯誤')
+                    hls.recoverMediaError()
+                    return
+                  default:
+                    setError('影片載入失敗: ' + data.details)
+                }
                 setLoading(false)
               }
+            })
+            
+            hls.on(Hls.Events.FRAG_LOADED, () => {
+              clearTimeout(timeoutId)
+              setLoading(false)
             })
           } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
             // Safari 原生支援 HLS
             videoRef.current.src = hlsUrl
             videoRef.current.addEventListener('loadedmetadata', () => {
+              clearTimeout(timeoutId)
               setLoading(false)
-              videoRef.current?.play()
+              videoRef.current?.play().catch(e => console.log('Autoplay blocked:', e))
+            })
+            videoRef.current.addEventListener('error', () => {
+              clearTimeout(timeoutId)
+              setError('影片載入失敗')
+              setLoading(false)
             })
           } else {
             setError('瀏覽器不支援 HLS 播放')
@@ -483,12 +524,13 @@ function VideoModal({ result, onClose }: { result: TestResult; onClose: () => vo
     
     // 清理
     return () => {
+      clearTimeout(timeoutId)
       if (hlsRef.current) {
         hlsRef.current.destroy()
         hlsRef.current = null
       }
     }
-  }, [result.hls_stream_name, result.hls_start_time, result.hls_end_time])
+  }, [result.hls_stream_name, result.hls_start_time, result.hls_end_time, result.tested_at])
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

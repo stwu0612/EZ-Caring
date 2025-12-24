@@ -65,16 +65,16 @@ export async function POST(request: NextRequest) {
       hlsStartTime = new Date(startTime)
       hlsEndTime = new Date(endTime)
     } else if (testedAt) {
-      // 根據測試時間估算（測試前 1 分鐘到測試後 5 分鐘）
+      // 根據測試時間估算（測試前 2 分鐘到測試後 5 分鐘）
       const testTime = new Date(testedAt)
-      hlsStartTime = new Date(testTime.getTime() - 60 * 1000) // 1 分鐘前
+      hlsStartTime = new Date(testTime.getTime() - 2 * 60 * 1000) // 2 分鐘前
       hlsEndTime = new Date(testTime.getTime() + 5 * 60 * 1000) // 5 分鐘後
     } else {
       // 從串流名稱中提取時間戳（exam-1766572119961 格式）
       const match = streamName.match(/exam-(\d+)/)
       if (match) {
         const timestamp = parseInt(match[1])
-        hlsStartTime = new Date(timestamp - 60 * 1000) // 1 分鐘前
+        hlsStartTime = new Date(timestamp - 2 * 60 * 1000) // 2 分鐘前
         hlsEndTime = new Date(timestamp + 5 * 60 * 1000) // 5 分鐘後
       } else {
         // 最後手段：使用最近 10 分鐘
@@ -83,11 +83,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    console.log('HLS Request:', {
+      streamName,
+      startTime: hlsStartTime.toISOString(),
+      endTime: hlsEndTime.toISOString(),
+    })
+
+    // 使用 LIVE_REPLAY 模式（更可靠）
     const hlsParams = {
       StreamName: streamName,
-      PlaybackMode: 'ON_DEMAND' as const,
+      PlaybackMode: 'LIVE_REPLAY' as const,
       HLSFragmentSelector: {
-        FragmentSelectorType: 'PRODUCER_TIMESTAMP' as const,
+        FragmentSelectorType: 'SERVER_TIMESTAMP' as const,
         TimestampRange: {
           StartTimestamp: hlsStartTime,
           EndTimestamp: hlsEndTime,
@@ -95,16 +102,10 @@ export async function POST(request: NextRequest) {
       },
       ContainerFormat: 'FRAGMENTED_MP4' as const,
       DiscontinuityMode: 'ALWAYS' as const,
-      DisplayFragmentTimestamp: 'ALWAYS' as const,
+      DisplayFragmentTimestamp: 'NEVER' as const,
       MaxMediaPlaylistFragmentResults: 5000,
       Expires: 3600, // 1 小時有效
     }
-
-    console.log('HLS Params:', {
-      streamName,
-      startTime: hlsStartTime.toISOString(),
-      endTime: hlsEndTime.toISOString(),
-    })
 
     const getHLSCommand = new GetHLSStreamingSessionURLCommand(hlsParams)
     const hlsResponse = await archivedMediaClient.send(getHLSCommand)
@@ -119,6 +120,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       hlsUrl: hlsResponse.HLSStreamingSessionURL,
+      debug: {
+        startTime: hlsStartTime.toISOString(),
+        endTime: hlsEndTime.toISOString(),
+      }
     })
 
   } catch (error: any) {

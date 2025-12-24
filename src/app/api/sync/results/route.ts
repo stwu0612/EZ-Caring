@@ -13,6 +13,9 @@ import { createAdminClient } from '@/lib/supabase/server'
  *     {
  *       "ulid": "01HQXXX...",
  *       "subject_ulid": "01HQYYY...",
+ *       "subject_name": "王小明",
+ *       "subject_age": 65,
+ *       "subject_gender": "male",
  *       "test_type": "sit_stand",
  *       "test_name": "椅子坐站測試",
  *       "result_value": 12.5,
@@ -43,16 +46,48 @@ export async function POST(request: NextRequest) {
 
     for (const result of results) {
       try {
-        // 查找 subject
+        // 查找或創建 subject
         let subjectId = null
         if (result.subject_ulid) {
-          const { data: subject } = await supabase
+          // 先嘗試查找現有的 subject
+          const { data: existingSubject } = await supabase
             .from('subjects')
             .select('id')
             .eq('ulid', result.subject_ulid)
             .single()
           
-          subjectId = subject?.id
+          if (existingSubject) {
+            subjectId = existingSubject.id
+            
+            // 如果有新的名字，更新它
+            if (result.subject_name) {
+              await supabase
+                .from('subjects')
+                .update({ 
+                  name: result.subject_name,
+                  gender: result.subject_gender,
+                  age: result.subject_age,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', subjectId)
+            }
+          } else if (result.subject_name) {
+            // 如果沒有找到且有名字，創建新的 subject
+            const { data: newSubject, error: createError } = await supabase
+              .from('subjects')
+              .insert({
+                ulid: result.subject_ulid,
+                name: result.subject_name,
+                gender: result.subject_gender || null,
+                age: result.subject_age || null,
+              })
+              .select('id')
+              .single()
+            
+            if (!createError && newSubject) {
+              subjectId = newSubject.id
+            }
+          }
         }
 
         // Upsert 測試結果
