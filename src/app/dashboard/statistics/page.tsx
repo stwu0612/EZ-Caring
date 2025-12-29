@@ -107,7 +107,7 @@ export default function StatisticsPage() {
         average: values.reduce((a, b) => a + b, 0) / values.length,
       }))
       
-      // 6. SPPB 風險分布
+      // 6. SPPB 風險分佈
       const { data: sppbData } = await supabase
         .from('sppb_assessments')
         .select('risk_level')
@@ -142,13 +142,19 @@ export default function StatisticsPage() {
     setLoading(false)
   }
 
+  // 自定義 Pie Chart Label
+  const renderPieLabel = ({ name, percent }: { name: string; percent?: number }) => {
+    const percentage = ((percent ?? 0) * 100).toFixed(0)
+    return `${name} ${percentage}%`
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-800 mb-6">統計報表</h1>
 
       {/* 日期篩選 */}
       <div className="card p-4 mb-6">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <span className="text-sm text-gray-600">日期範圍：</span>
           <input
             type="date"
@@ -247,9 +253,9 @@ export default function StatisticsPage() {
               </ResponsiveContainer>
             </div>
 
-            {/* 測試類型分布 */}
+            {/* 測試類型分佈 */}
             <div className="card p-6">
-              <h3 className="text-lg font-semibold mb-4">測試類型分布</h3>
+              <h3 className="text-lg font-semibold mb-4">測試類型分佈</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
@@ -259,7 +265,7 @@ export default function StatisticsPage() {
                     cx="50%"
                     cy="50%"
                     outerRadius={100}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    label={renderPieLabel}
                   >
                     {stats.testsByType.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -284,9 +290,9 @@ export default function StatisticsPage() {
               </ResponsiveContainer>
             </div>
 
-            {/* SPPB 風險分布 */}
+            {/* SPPB 風險分佈 */}
             <div className="card p-6">
-              <h3 className="text-lg font-semibold mb-4">SPPB 風險分布</h3>
+              <h3 className="text-lg font-semibold mb-4">SPPB 風險分佈</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={stats.sppbDistribution}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -326,7 +332,9 @@ export default function StatisticsPage() {
                         {avg ? avg.average.toFixed(2) : '-'}
                       </td>
                       <td className="table-cell text-right">
-                        {((item.count / stats.totalTests) * 100).toFixed(1)}%
+                        {stats.totalTests > 0 
+                          ? ((item.count / stats.totalTests) * 100).toFixed(1) 
+                          : '0'}%
                       </td>
                     </tr>
                   )
