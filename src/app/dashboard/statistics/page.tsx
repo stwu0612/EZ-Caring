@@ -143,9 +143,10 @@ export default function StatisticsPage() {
   }
 
   // 自定義 Pie Chart Label
-  const renderPieLabel = ({ name, percent }: { name: string; percent?: number }) => {
+  const renderPieLabel = (props: { name?: string; percent?: number }) => {
+    const { name, percent } = props
     const percentage = ((percent ?? 0) * 100).toFixed(0)
-    return `${name} ${percentage}%`
+    return `${name ?? ''} ${percentage}%`
   }
 
   return (
