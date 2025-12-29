@@ -285,7 +285,7 @@ export default function StatisticsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
                   <YAxis dataKey="name" type="category" width={120} />
-                  <Tooltip formatter={(value: number) => value.toFixed(2)} />
+                  <Tooltip formatter={(value) => typeof value === 'number' ? value.toFixed(2) : value} />
                   <Bar dataKey="average" fill="#FF6B35" name="平均值" />
                 </BarChart>
               </ResponsiveContainer>
