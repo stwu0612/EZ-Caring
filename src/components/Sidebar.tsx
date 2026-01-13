@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { 
   Users, 
@@ -62,7 +63,13 @@ export default function Sidebar({ userName = 'User' }: SidebarProps) {
         {/* Logo */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
           {!collapsed && (
-            <span className="text-xl font-bold text-primary-600">Logo</span>
+            <Image 
+              src="/logo.png" 
+              alt="EZ-Caring Logo" 
+              width={120} 
+              height={40}
+              className="object-contain"
+            />
           )}
           <button
             onClick={() => setCollapsed(!collapsed)}
