@@ -41,7 +41,10 @@ function parseS3Key(key: string): S3VideoFile | null {
   const minute = parseInt(timeStr.substring(2, 4))
   const second = parseInt(timeStr.substring(4, 6))
   
-  const recordingTime = new Date(year, month, day, hour, minute, second)
+  // S3 檔名是台灣時間 (UTC+8)，轉成 UTC 來比對資料庫
+  // 建立台灣時間的 ISO string，然後轉成 Date
+  const taiwanTimeStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}+08:00`
+  const recordingTime = new Date(taiwanTimeStr)
   
   return {
     key,
