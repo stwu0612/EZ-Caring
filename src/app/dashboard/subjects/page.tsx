@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Subject } from '@/types'
-import { Search, ChevronDown, Edit, Trash2, Eye, Plus, X } from 'lucide-react'
+import { Search, ChevronDown, Edit, Trash2, Eye, Plus, X, FileText } from 'lucide-react'
 import { format } from 'date-fns'
 
 // 產生 ULID
@@ -105,6 +106,7 @@ function ConfirmModal({
 }
 
 export default function SubjectsPage() {
+  const router = useRouter()
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
@@ -569,6 +571,13 @@ export default function SubjectsPage() {
                     </td>
                     <td className="table-cell">
                       <div className="flex gap-2">
+                        <button 
+                          onClick={() => router.push(`/dashboard/subjects/${subject.ulid}/report`)}
+                          className="p-1 hover:bg-orange-50 rounded"
+                          title="SPPB 報告"
+                        >
+                          <FileText size={18} className="text-orange-500" />
+                        </button>
                         <button 
                           onClick={() => handleView(subject)}
                           className="p-1 hover:bg-gray-100 rounded"
