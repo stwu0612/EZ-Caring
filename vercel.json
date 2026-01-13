@@ -1,0 +1,6 @@
+{
+  "crons": [{
+    "path": "/api/sync/s3-videos",
+    "schedule": "0 2 * * *"
+  }]
+}
