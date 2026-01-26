@@ -203,6 +203,25 @@ export default function ResultsPage() {
   const fetchResults = async () => {
     setLoading(true)
     
+    // 如果有姓名過濾，先查詢符合條件的 subject_id
+    let subjectIds: string[] | null = null
+    if (filters.keyword && filters.keyword.trim()) {
+      const { data: subjects } = await supabase
+        .from('subjects')
+        .select('id')
+        .ilike('name', `%${filters.keyword.trim()}%`)
+      
+      if (subjects && subjects.length > 0) {
+        subjectIds = subjects.map(s => s.id)
+      } else {
+        // 沒有符合的受測者，直接返回空結果
+        setResults([])
+        setTotal(0)
+        setLoading(false)
+        return
+      }
+    }
+    
     let query = supabase
       .from('test_results')
       .select(`
@@ -221,6 +240,11 @@ export default function ResultsPage() {
     }
     if (filters.dateTo) {
       query = query.lte('tested_at', filters.dateTo + 'T23:59:59')
+    }
+    
+    // 受測者姓名過濾 - 用 subject_id in 查詢
+    if (subjectIds) {
+      query = query.in('subject_id', subjectIds)
     }
 
     const { data, count, error } = await query
