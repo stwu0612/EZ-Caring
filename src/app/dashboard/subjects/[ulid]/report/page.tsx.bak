@@ -240,16 +240,8 @@ export default function SPPBReportPage() {
       .eq('ulid', ulid)
       .single()
 
-   if (subjectData) {
-      const subjectWithGrip = subjectData as SubjectWithGripStrength
-      setSubject(subjectWithGrip)
-
-      // 新增邏輯：從 subjects.grip_strength 帶入現有輸入框
-      if (subjectWithGrip.grip_strength !== null && subjectWithGrip.grip_strength !== undefined) {
-        setGripStrength(String(subjectWithGrip.grip_strength))
-      } else {
-        setGripStrength('')
-      }
+    if (subjectData) {
+      setSubject(subjectData)
     }
 
     // 取得該受測者的所有測試結果
